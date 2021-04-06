@@ -291,7 +291,8 @@ mkTracers blockConfig tOpts@(TracingOn trSel) tr nodeKern ekgDirect = do
           dtTracePeerSelectionTracer =
             tracerOnOff (tracePeerSelection trSel) verb "PeerSelection" tr,
           dtDebugPeerSelectionInitiatorTracer =
-            tracerOnOff (traceDebugPeerSelectionInitiatorTracer trSel)
+            tracePeerSelectionCountersMetrics ekgDirect $
+              tracerOnOff (traceDebugPeerSelectionInitiatorTracer trSel)
                         verb "DebugPeerSelection" tr,
           dtDebugPeerSelectionInitiatorResponderTracer =
             tracerOnOff (traceDebugPeerSelectionInitiatorResponderTracer trSel)
@@ -302,7 +303,8 @@ mkTracers blockConfig tOpts@(TracingOn trSel) tr nodeKern ekgDirect = do
           dtPeerSelectionActionsTracer =
             tracerOnOff (tracePeerSelectionActions trSel) verb "PeerSelectionActions" tr,
           dtConnectionManagerTracer =
-            tracerOnOff (traceConnectionManager trSel) verb "ConnectionManager" tr,
+            traceConnectionManagerTraceMetrics ekgDirect $
+              tracerOnOff (traceConnectionManager trSel) verb "ConnectionManager" tr,
           dtServerTracer =
             tracerOnOff (traceServer trSel) verb "Server" tr,
           dtInboundGovernorTracer =
@@ -1183,6 +1185,43 @@ teeTraceBlockFetchDecisionElide
     -> Trace IO Text
     -> Tracer IO (WithSeverity [TraceLabelPeer peer (FetchDecision [Point (Header blk)])])
 teeTraceBlockFetchDecisionElide = elideToLogObject
+
+--------------------------------------------------------------------------------
+-- PeerSelection Tracers
+--------------------------------------------------------------------------------
+
+traceConnectionManagerTraceMetrics :: Maybe EKGDirect -> Tracer IO ConnectionManagerTrace -> Tracer IO ConnectionManagerTrace
+traceConnectionManagerTraceMetrics Nothing tracer = tracer
+traceConnectionManagerTraceMetrics (Just ekgDirect) tracer = Tracer cmtTracer
+  where
+    cmtTracer :: ConnectionManagerTrace -> IO ()
+    cmtTracer (TrConnectionManagerCounters
+                (ConnectionManagerCounters
+                  numberConns
+                  duplexConns
+                  uniConns
+                  incomingConns
+                  outgoingConns
+                )
+              ) = do
+      sendEKGDirectInt ekgDirect "cardano.node.metrics.connectionManager.numberConns" numberConns
+      sendEKGDirectInt ekgDirect "cardano.node.metrics.connectionManager.duplexConns" duplexConns
+      sendEKGDirectInt ekgDirect "cardano.node.metrics.connectionManager.uniConns" uniConns
+      sendEKGDirectInt ekgDirect "cardano.node.metrics.connectionManager.incomingConns" incomingConns
+      sendEKGDirectInt ekgDirect "cardano.node.metrics.connectionManager.outgoingConns" outgoingConns
+    cmtTracer _ = return ()
+
+
+
+tracePeerSelectionCountersMetrics :: Maybe EKGDirect -> Tracer IO PeerSelectionCounters -> Tracer IO PeerSelectionCounters
+tracePeerSelectionCountersMetrics Nothing tracer = tracer
+tracePeerSelectionCountersMetrics (Just ekgDirect) tracer = Tracer pscTracer
+  where
+    pscTracer :: PeerSelectionCounters -> IO ()
+    pscTracer (PeerSelectionActions cold warm hot) = do
+      sendEKGDirectInt ekgDirect "cardano.node.metrics.peerSelection.cold" cold
+      sendEKGDirectInt ekgDirect "cardano.node.metrics.peerSelection.warm" warm
+      sendEKGDirectInt ekgDirect "cardano.node.metrics.peerSelection.hot" hot
 
 
 -- | get information about a chain fragment
