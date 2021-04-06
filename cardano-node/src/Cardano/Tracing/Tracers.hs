@@ -79,7 +79,11 @@ import           Ouroboros.Network.BlockFetch.ClientState (TraceLabelPeer (..), 
 import           Ouroboros.Network.BlockFetch.Decision (FetchDecision, FetchDecline (..))
 import           Ouroboros.Network.Point (fromWithOrigin, withOrigin)
 import           Ouroboros.Network.Protocol.LocalStateQuery.Type (ShowQuery)
-import           Ouroboros.Network.Diffusion (DiffusionTracers (..))
+import           Ouroboros.Network.Diffusion ( DiffusionTracers (..)
+                                              , ConnectionManagerTrace (..)
+                                              , PeerSelectionCounters (..)
+                                              , ConnectionManagerCounters (..)
+                                             )
 import qualified Ouroboros.Network.Diffusion as Diffusion
 
 import qualified Ouroboros.Consensus.Storage.ChainDB as ChainDB
@@ -291,14 +295,14 @@ mkTracers blockConfig tOpts@(TracingOn trSel) tr nodeKern ekgDirect = do
           dtTracePeerSelectionTracer =
             tracerOnOff (tracePeerSelection trSel) verb "PeerSelection" tr,
           dtDebugPeerSelectionInitiatorTracer =
-            tracePeerSelectionCountersMetrics ekgDirect $
-              tracerOnOff (traceDebugPeerSelectionInitiatorTracer trSel)
+            tracerOnOff (traceDebugPeerSelectionInitiatorTracer trSel)
                         verb "DebugPeerSelection" tr,
           dtDebugPeerSelectionInitiatorResponderTracer =
             tracerOnOff (traceDebugPeerSelectionInitiatorResponderTracer trSel)
                         verb "DebugPeerSelection" tr,
           dtTracePeerSelectionCounters =
-            tracerOnOff (tracePeerSelectionCounters trSel)
+            tracePeerSelectionCountersMetrics ekgDirect $
+              tracerOnOff (tracePeerSelectionCounters trSel)
                         verb "PeerSelectionCounters" tr,
           dtPeerSelectionActionsTracer =
             tracerOnOff (tracePeerSelectionActions trSel) verb "PeerSelectionActions" tr,
@@ -645,7 +649,7 @@ traceBlockFetchServerMetrics (Just ekgDirect) tBlocksServed tLocalUp tMaxSlotNo 
                             return (served, Just lu)
       sendEKGDirectInt ekgDirect "cardano.node.metrics.served.block.count" served
       case mbLocalUpstreamyness of
-           Just localUpstreamyness -> 
+           Just localUpstreamyness ->
                 sendEKGDirectInt ekgDirect "cardano.node.metrics.served.block.latest.count"
                                  localUpstreamyness
            Nothing                 -> return ()
@@ -1190,11 +1194,14 @@ teeTraceBlockFetchDecisionElide = elideToLogObject
 -- PeerSelection Tracers
 --------------------------------------------------------------------------------
 
-traceConnectionManagerTraceMetrics :: Maybe EKGDirect -> Tracer IO ConnectionManagerTrace -> Tracer IO ConnectionManagerTrace
-traceConnectionManagerTraceMetrics Nothing tracer = tracer
-traceConnectionManagerTraceMetrics (Just ekgDirect) tracer = Tracer cmtTracer
+traceConnectionManagerTraceMetrics
+    :: Maybe EKGDirect
+    -> Tracer IO (ConnectionManagerTrace peerAddr handlerTrace)
+    -> Tracer IO (ConnectionManagerTrace peerAddr handlerTrace)
+traceConnectionManagerTraceMetrics Nothing tracer     = tracer
+traceConnectionManagerTraceMetrics (Just ekgDirect) _ = Tracer cmtTracer
   where
-    cmtTracer :: ConnectionManagerTrace -> IO ()
+    cmtTracer :: (ConnectionManagerTrace peerAddr handlerTrace) -> IO ()
     cmtTracer (TrConnectionManagerCounters
                 (ConnectionManagerCounters
                   numberConns
@@ -1214,11 +1221,11 @@ traceConnectionManagerTraceMetrics (Just ekgDirect) tracer = Tracer cmtTracer
 
 
 tracePeerSelectionCountersMetrics :: Maybe EKGDirect -> Tracer IO PeerSelectionCounters -> Tracer IO PeerSelectionCounters
-tracePeerSelectionCountersMetrics Nothing tracer = tracer
-tracePeerSelectionCountersMetrics (Just ekgDirect) tracer = Tracer pscTracer
+tracePeerSelectionCountersMetrics Nothing tracer     = tracer
+tracePeerSelectionCountersMetrics (Just ekgDirect) _ = Tracer pscTracer
   where
     pscTracer :: PeerSelectionCounters -> IO ()
-    pscTracer (PeerSelectionActions cold warm hot) = do
+    pscTracer (PeerSelectionCounters cold warm hot) = do
       sendEKGDirectInt ekgDirect "cardano.node.metrics.peerSelection.cold" cold
       sendEKGDirectInt ekgDirect "cardano.node.metrics.peerSelection.warm" warm
       sendEKGDirectInt ekgDirect "cardano.node.metrics.peerSelection.hot" hot
