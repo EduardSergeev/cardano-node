@@ -175,6 +175,8 @@ module Cardano.Api (
     TxCertificates(..),
     TxUpdateProposal(..),
     TxMintValue(..),
+    TxExecutionUnits(..),
+    TxWitnessPPDataHash(..),
 
     -- ** Era-dependent transaction body features
     MultiAssetSupportedInEra(..),
