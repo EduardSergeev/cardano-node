@@ -1332,17 +1332,17 @@ collectTxBodySimpleScripts TxBodyContent {
     , (_, _, BuildTxWith witness) <- withdrawals
     , script <- simpleScriptInEra witness ]
 
- ++ do TxCertificates _ _ (BuildTxWith witnesses) <- [txCertificates]
-       getScripts witnesses
+ ++ [ script
+    | TxCertificates _ _ (BuildTxWith witnesses) <- [txCertificates]
+    , witness <- Map.elems witnesses
+    , script <- simpleScriptInEra witness ]
 
- ++ do TxMintValue _ _ (BuildTxWith witnesses) <- [txMintValue]
-       getScripts witnesses
+ ++ [ script
+    | TxMintValue _ _ (BuildTxWith witnesses) <- [txMintValue]
+    , witness <- Map.elems witnesses
+    , script <- simpleScriptInEra witness ]
+
   where
-    getScripts :: Map k (Witness witctx era) -> [SimpleScriptInEra era]
-    getScripts witnesses = do
-      witness <- Map.elems witnesses
-      simpleScriptInEra witness
-
     simpleScriptInEra :: Witness witctx era -> [SimpleScriptInEra era]
     simpleScriptInEra (ScriptWitness
                          _ (SimpleScriptWitness langInEra version script)) =

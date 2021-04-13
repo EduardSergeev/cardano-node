@@ -164,9 +164,9 @@ renderShelleyTxCmdError err =
        ") is not supported in the " <> renderMode mode <> " consensus mode."
     ShelleyTxCmdGenesisCmdError e -> renderShelleyGenesisCmdError e
     ShelleyTxCmdPolicyIdNotSpecified sWit ->
-      "Multi asset value policy id: " <> serialiseToRawBytesHexText sWit <>
-      " has not been specified in the \"--mint\" field. "
-
+      "A script provided to witness minting does not correspond to the policy id \
+      \of any asset specified in the \"--mint\" field. The script hash is: "
+      <> serialiseToRawBytesHexText sWit
 
 renderEra :: AnyCardanoEra -> Text
 renderEra (AnyCardanoEra ByronEra)   = "Byron"
@@ -199,11 +199,11 @@ runTransactionCmd :: TransactionCmd -> ExceptT ShelleyTxCmdError IO ()
 runTransactionCmd cmd =
   case cmd of
     TxBuildRaw era txins txouts mValue mLowBound mUpperBound
-               fee certs wdrls metadataSchema
-               metadataFiles mUpProp out ->
+               fee certs wdrls metadataSchema scriptFiles
+               metadataFiles  mUpProp out ->
       runTxBuildRaw era txins txouts mLowBound mUpperBound
                     fee mValue certs wdrls metadataSchema
-                    metadataFiles mUpProp out
+                    metadataFiles scriptFiles mUpProp out
     TxSign txinfile skfiles network txoutfile ->
       runTxSign txinfile skfiles network txoutfile
     TxSubmit anyConensusModeParams network txFp ->
@@ -242,14 +242,15 @@ runTxBuildRaw
   -> [(StakeAddress, Lovelace, Maybe ScriptFile)]
   -> TxMetadataJsonSchema
   -> [MetadataFile]
+  -> [ScriptFile]
   -> Maybe UpdateProposalFile
   -> TxBodyFile
   -> ExceptT ShelleyTxCmdError IO ()
 runTxBuildRaw (AnyCardanoEra era) inputsAndScripts txouts mLowerBound
               mUpperBound mFee mValue
               certFiles withdrawals
-              metadataSchema
-              metadataFiles mUpdatePropFile
+              metadataSchema metadataFiles
+              scriptFiles mUpdatePropFile
               (TxBodyFile fpath) = do
     txBodyContent <-
       TxBodyContent
@@ -259,8 +260,7 @@ runTxBuildRaw (AnyCardanoEra era) inputsAndScripts txouts mLowerBound
         <*> ((,) <$> validateTxValidityLowerBound era mLowerBound
                  <*> validateTxValidityUpperBound era mUpperBound)
         <*> validateTxMetadataInEra  era metadataSchema metadataFiles
-        <*> validateTxAuxScripts     era
-             (collectTxBodyScripts inputsAndScripts mValue certFiles withdrawals)
+        <*> validateTxAuxScripts     era scriptFiles
         <*> validateTxWithdrawals    era withdrawals
         <*> validateTxCertificates   era certFiles
         <*> validateTxUpdateProposal era mUpdatePropFile
@@ -272,21 +272,6 @@ runTxBuildRaw (AnyCardanoEra era) inputsAndScripts txouts mLowerBound
 
     firstExceptT ShelleyTxCmdWriteFileError . newExceptT $
       writeFileTextEnvelope fpath Nothing txBody
-
-collectTxBodyScripts
-  :: [(TxIn, Maybe ScriptFile)]
-  -> Maybe (Value, [ScriptFile])
-  -> [(CertificateFile, Maybe ScriptFile)]
-  -> [(StakeAddress, Lovelace, Maybe ScriptFile)]
-  -> [ScriptFile]
-collectTxBodyScripts txins mMint certs withdrawals =
-  let lockingScripts = [sFile | (_, Just sFile) <- txins]
-      mintingScripts = case mMint of
-                         Just (_, mintSfiles) -> mintSfiles
-                         Nothing -> []
-      certScripts = [sFile | (_, Just sFile) <- certs]
-      withdrawalScripts = [sFile | (_, _, Just sFile) <- withdrawals]
-  in concat [lockingScripts, mintingScripts, certScripts, withdrawalScripts]
 
 -- ----------------------------------------------------------------------------
 -- Transaction body validation and conversion
@@ -329,26 +314,11 @@ validateTxIns era = mapM convert
      -> ExceptT ShelleyTxCmdError IO (TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn era))
    convert (txin, mScriptFile) =
      case mScriptFile of
-       Just (ScriptFile sFp) ->
-         case auxScriptsSupportedInEra era of
-           Nothing -> txFeatureMismatch era TxFeatureScriptWitnesses
-           Just _supported -> do
-             ScriptInAnyLang sLang script <- firstExceptT ShelleyTxCmdReadJsonFileError
-                                               $ readFileScriptInAnyLang sFp
-             case scriptLanguageSupportedInEra era sLang of
-               Just sLangInEra ->
-                 case script of
-                   SimpleScript sVer sScript ->
-                     return
-                       ( txin
-                       , BuildTxWith
-                          (ScriptWitness ScriptWitnessForSpending
-                             $ SimpleScriptWitness sLangInEra sVer sScript)
-                       )
-               Nothing ->
-                 left $ ShelleyTxCmdScriptLanguageNotSupportedInEra
-                          (AnyScriptLanguage sLang)
-                          (AnyCardanoEra era)
+       Just sFp -> do
+         sWit <- createScriptWitness era sFp
+         return ( txin
+                , BuildTxWith $ ScriptWitness ScriptWitnessForSpending sWit
+                )
        Nothing -> return (txin, BuildTxWith $ KeyWitness KeyWitnessForSpending)
 
 validateTxOuts :: forall era.
@@ -474,23 +444,12 @@ validateTxWithdrawals era withdrawals =
            (StakeAddress, Lovelace, BuildTxWith BuildTx (Witness WitCtxStake era))
   convert (sAddr, ll, mScriptFile) =
     case mScriptFile of
-      Just (ScriptFile fp) -> do
-        ScriptInAnyLang sLang script <- firstExceptT ShelleyTxCmdReadJsonFileError
-                                          $ readFileScriptInAnyLang fp
-        case scriptLanguageSupportedInEra era sLang of
-          Just sLangInEra ->
-            case script of
-              SimpleScript sVer sScript ->
-                return ( sAddr
-                       , ll
-                       , BuildTxWith
-                           (ScriptWitness ScriptWitnessForStakeAddr
-                             $ SimpleScriptWitness sLangInEra sVer sScript)
-                       )
-          Nothing ->
-            left $ ShelleyTxCmdScriptLanguageNotSupportedInEra
-                     (AnyScriptLanguage sLang)
-                     (AnyCardanoEra era)
+      Just sFp -> do
+        sWit <- createScriptWitness era sFp
+        return ( sAddr
+               , ll
+               , BuildTxWith $ ScriptWitness ScriptWitnessForStakeAddr sWit
+               )
       Nothing -> return (sAddr,ll, BuildTxWith $ KeyWitness KeyWitnessForStakeAddr)
 
 validateTxCertificates
@@ -534,21 +493,12 @@ validateTxCertificates era certFiles =
        Nothing -> return Nothing
        Just sCred ->
          case mScript of
-           Just (ScriptFile fp) -> do
-            ScriptInAnyLang sLang script <- firstExceptT ShelleyTxCmdReadJsonFileError
-                                              $ readFileScriptInAnyLang fp
-            case scriptLanguageSupportedInEra era sLang of
-              Just sLangInEra ->
-                case script of
-                  SimpleScript sVer sScript ->
-                    return $ Just ( sCred
-                                  , ScriptWitness ScriptWitnessForStakeAddr
-                                      $ SimpleScriptWitness sLangInEra sVer sScript
-                                  )
-              Nothing ->
-                left $ ShelleyTxCmdScriptLanguageNotSupportedInEra
-                         (AnyScriptLanguage sLang)
-                         (AnyCardanoEra era)
+           Just sFp -> do
+            sWit <- createScriptWitness era sFp
+            return $ Just ( sCred
+                          , ScriptWitness ScriptWitnessForStakeAddr sWit
+                          )
+
            Nothing -> return $ Just (sCred, KeyWitness KeyWitnessForStakeAddr)
 
 validateTxUpdateProposal :: CardanoEra era
@@ -613,6 +563,26 @@ validateTxMintValue era (Just (val, scripts)) =
                          )
 
      else left $ ShelleyTxCmdPolicyIdNotSpecified scriptHash
+
+
+createScriptWitness
+  :: IsCardanoEra era
+  => CardanoEra era
+  -> ScriptFile
+  -> ExceptT ShelleyTxCmdError IO (ScriptWitness witctx era)
+createScriptWitness era (ScriptFile fp) = do
+  ScriptInAnyLang sLang script <- firstExceptT ShelleyTxCmdReadJsonFileError
+                                    $ readFileScriptInAnyLang fp
+  case scriptLanguageSupportedInEra era sLang of
+    Just sLangInEra ->
+      case script of
+        SimpleScript sVer sScript ->
+          return $ SimpleScriptWitness sLangInEra sVer sScript
+
+    Nothing ->
+      left $ ShelleyTxCmdScriptLanguageNotSupportedInEra
+               (AnyScriptLanguage sLang)
+               (AnyCardanoEra era)
 
 -- ----------------------------------------------------------------------------
 -- Transaction signing

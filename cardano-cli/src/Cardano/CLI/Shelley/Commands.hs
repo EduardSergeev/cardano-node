@@ -177,6 +177,7 @@ data TransactionCmd
       -- ^ Certificates with potential script witness
       [(StakeAddress, Lovelace, Maybe ScriptFile)]
       TxMetadataJsonSchema
+      [ScriptFile]
       [MetadataFile]
       (Maybe UpdateProposalFile)
       TxBodyFile

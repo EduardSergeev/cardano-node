@@ -514,6 +514,7 @@ pTransaction =
                                  <*> many pCertificateFile
                                  <*> many pWithdrawal
                                  <*> pTxMetadataJsonSchema
+                                 <*> many pScript
                                  <*> many pMetadataFile
                                  <*> optional pUpdateProposalFile
                                  <*> pTxBodyFile Output
