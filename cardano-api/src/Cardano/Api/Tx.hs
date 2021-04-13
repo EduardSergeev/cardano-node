@@ -23,6 +23,11 @@ module Cardano.Api.Tx (
     getTxBody,
     getTxWitnesses,
 
+    -- ** Functions for fetching registrations and deregistrations
+    getTxCertificates,
+    certToStakePoolRegistration,
+    certToStakePoolRetirement,
+
     -- ** Signing in one go
     ShelleySigningKey(..),
     toShelleySigningKey,
@@ -53,7 +58,9 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 
+import qualified Data.Foldable as Fold
 import qualified Data.Map.Strict as Map
+import qualified Data.Sequence.Strict as Seq
 import qualified Data.Set as Set
 import qualified Data.Vector as Vector
 
@@ -94,6 +101,7 @@ import qualified Shelley.Spec.Ledger.Address.Bootstrap as Shelley
 import           Shelley.Spec.Ledger.BaseTypes (maybeToStrictMaybe, strictMaybeToMaybe)
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
+import qualified Shelley.Spec.Ledger.Slot as Shelley
 
 import           Cardano.Api.Address
 import           Cardano.Api.Certificate
@@ -108,6 +116,28 @@ import           Cardano.Api.SerialiseCBOR
 import           Cardano.Api.SerialiseTextEnvelope
 import           Cardano.Api.TxBody
 
+import qualified Cardano.Ledger.ShelleyMA.TxBody as Allegra
+
+-- | Get all the @Certificate@ from @Tx@.
+getTxCertificates :: forall era. Tx era -> [Certificate]
+getTxCertificates tx =
+    case getTxBody tx of
+        -- Byron doesn't have any additional certificates!
+        ByronTxBody {} -> []
+        ShelleyTxBody ShelleyBasedEraShelley (Shelley.TxBody _ _ certs _ _ _ _ _) _aux ->
+            map fromShelleyCertificate (Fold.toList $ Seq.fromStrict certs)
+        ShelleyTxBody ShelleyBasedEraAllegra (Allegra.TxBody _ _ certs _ _ _ _ _ _) _aux ->
+            map fromShelleyCertificate (Fold.toList $ Seq.fromStrict certs)
+        ShelleyTxBody ShelleyBasedEraMary (Allegra.TxBody _ _ certs _ _ _ _ _ _) _aux ->
+            map fromShelleyCertificate (Fold.toList $ Seq.fromStrict certs)
+
+certToStakePoolRegistration :: Certificate -> Maybe StakePoolMetadataReference
+certToStakePoolRegistration (StakePoolRegistrationCertificate stakePoolParameters) = stakePoolMetadata stakePoolParameters
+certToStakePoolRegistration _ = Nothing
+
+certToStakePoolRetirement :: Certificate -> Maybe (PoolId, Shelley.EpochNo)
+certToStakePoolRetirement (StakePoolRetirementCertificate poolId epochNo) = Just (poolId, epochNo)
+certToStakePoolRetirement _ = Nothing
 
 -- ----------------------------------------------------------------------------
 -- Signed transactions
