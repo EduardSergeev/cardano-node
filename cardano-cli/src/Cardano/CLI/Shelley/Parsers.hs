@@ -690,11 +690,10 @@ pQueryCmd =
         <*> pMaybeOutputFile
 
     pQueryTip :: Parser QueryCmd
-    pQueryTip =
-      QueryTip
-        <$> pConsensusModeParams
-        <*> pNetworkId
-        <*> pMaybeOutputFile
+    pQueryTip = QueryTip
+                  <$> pConsensusModeParams
+                  <*> pNetworkId
+                  <*> pMaybeOutputFile
 
     pQueryUTxO :: Parser QueryCmd
     pQueryUTxO =
@@ -720,32 +719,28 @@ pQueryCmd =
         <*> pMaybeOutputFile
 
     pQueryLedgerState :: Parser QueryCmd
-    pQueryLedgerState =
-      QueryLedgerState'
-        <$> pConsensusModeParams
-        <*> pNetworkId
-        <*> pMaybeOutputFile
+    pQueryLedgerState = QueryLedgerState'
+                          <$> pConsensusModeParams
+                          <*> pNetworkId
+                          <*> pMaybeOutputFile
 
     pQueryProtocolState :: Parser QueryCmd
-    pQueryProtocolState =
-      QueryProtocolState'
-        <$> pConsensusModeParams
-        <*> pNetworkId
-        <*> pMaybeOutputFile
+    pQueryProtocolState = QueryProtocolState'
+                            <$> pConsensusModeParams
+                            <*> pNetworkId
+                            <*> pMaybeOutputFile
 
     pQueryStakeSnapshot :: Parser QueryCmd
-    pQueryStakeSnapshot =
-      QueryStakeSnapshot'
-        <$> pConsensusModeParams
-        <*> pNetworkId
-        <*> pStakePoolVerificationKeyHash
+    pQueryStakeSnapshot = QueryStakeSnapshot'
+      <$> pConsensusModeParams
+      <*> pNetworkId
+      <*> pStakePoolVerificationKeyHash
 
     pQueryPoolParams :: Parser QueryCmd
-    pQueryPoolParams =
-      QueryPoolParams'
-        <$> pConsensusModeParams
-        <*> pNetworkId
-        <*> pStakePoolVerificationKeyHash
+    pQueryPoolParams = QueryPoolParams'
+      <$> pConsensusModeParams
+      <*> pNetworkId
+      <*> pStakePoolVerificationKeyHash
 
 
 pGovernanceCmd :: Parser GovernanceCmd
