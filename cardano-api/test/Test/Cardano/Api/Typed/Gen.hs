@@ -1,4 +1,3 @@
-{-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -81,8 +80,7 @@ genLovelace = Lovelace <$> Gen.integral (Range.linear 0 5000)
 genScript :: ScriptLanguage lang -> Gen (Script lang)
 genScript (SimpleScriptLanguage lang) =
     SimpleScript lang <$> genSimpleScript lang
-
-genScript (PlutusScriptLanguage lang) = case lang of {}
+genScript (PlutusScriptLanguage PlutusScriptV1) = Gen.discard
 
 genSimpleScript :: SimpleScriptVersion lang -> Gen (SimpleScript lang)
 genSimpleScript lang =
@@ -352,6 +350,7 @@ genTxOutValue era =
     ShelleyEra -> TxOutAdaOnly AdaOnlyInShelleyEra <$> genLovelace
     AllegraEra -> TxOutAdaOnly AdaOnlyInAllegraEra <$> genLovelace
     MaryEra -> TxOutValue MultiAssetInMaryEra <$> genValueForTxOut
+    AlonzoEra -> TxOutValue MultiAssetInAlonzoEra <$> genValueForTxOut
 
 genTxOut :: CardanoEra era -> Gen (TxOut era)
 genTxOut era =
@@ -363,6 +362,10 @@ genTxOut era =
         <$> (shelleyAddressInEra <$> genAddressShelley)
         <*> (TxOutAdaOnly AdaOnlyInAllegraEra <$> genLovelace)
     MaryEra ->
+      TxOut
+        <$> (shelleyAddressInEra <$> genAddressShelley)
+        <*> genTxOutValue era
+    AlonzoEra ->
       TxOut
         <$> (shelleyAddressInEra <$> genAddressShelley)
         <*> genTxOutValue era
@@ -378,6 +381,7 @@ genTxValidityLowerBound era =
     ShelleyEra -> pure TxValidityNoLowerBound
     AllegraEra -> TxValidityLowerBound ValidityLowerBoundInAllegraEra <$> genTtl
     MaryEra -> TxValidityLowerBound ValidityLowerBoundInMaryEra <$> genTtl
+    AlonzoEra -> TxValidityLowerBound ValidityLowerBoundInAlonzoEra <$> genTtl
 
 -- TODO: Accept a range for generating ttl.
 genTxValidityUpperBound :: CardanoEra era -> Gen (TxValidityUpperBound era)
@@ -387,6 +391,7 @@ genTxValidityUpperBound era =
     ShelleyEra -> TxValidityUpperBound ValidityUpperBoundInShelleyEra <$> genTtl
     AllegraEra -> TxValidityUpperBound ValidityUpperBoundInAllegraEra <$> genTtl
     MaryEra -> TxValidityUpperBound ValidityUpperBoundInMaryEra <$> genTtl
+    AlonzoEra -> TxValidityUpperBound ValidityUpperBoundInAlonzoEra <$> genTtl
 
 genTxValidityRange
   :: CardanoEra era
@@ -415,6 +420,11 @@ genTxMetadataInEra era =
         [ pure TxMetadataNone
         , TxMetadataInEra TxMetadataInMaryEra <$> genTxMetadata
         ]
+    AlonzoEra ->
+      Gen.choice
+        [ pure TxMetadataNone
+        , TxMetadataInEra TxMetadataInAlonzoEra <$> genTxMetadata
+        ]
 
 genTxAuxScripts :: CardanoEra era -> Gen (TxAuxScripts era)
 genTxAuxScripts era =
@@ -427,6 +437,9 @@ genTxAuxScripts era =
     MaryEra    -> TxAuxScripts AuxScriptsInMaryEra
                            <$> Gen.list (Range.linear 0 3)
                                         (genScriptInEra MaryEra)
+    AlonzoEra  -> TxAuxScripts AuxScriptsInAlonzoEra
+                           <$> Gen.list (Range.linear 0 3)
+                                        (genScriptInEra AlonzoEra)
 
 genTxWithdrawals :: CardanoEra era -> Gen (TxWithdrawals era)
 genTxWithdrawals era =
@@ -446,6 +459,11 @@ genTxWithdrawals era =
       Gen.choice
         [ pure TxWithdrawalsNone
         , pure (TxWithdrawals WithdrawalsInMaryEra mempty) -- TODO: Generate withdrawals
+        ]
+    AlonzoEra ->
+      Gen.choice
+        [ pure TxWithdrawalsNone
+        , pure (TxWithdrawals WithdrawalsInAlonzoEra mempty) -- TODO: Generate withdrawals
         ]
 
 genTxCertificates :: CardanoEra era -> Gen (TxCertificates era)
@@ -467,6 +485,11 @@ genTxCertificates era =
         [ pure TxCertificatesNone
         , pure (TxCertificates CertificatesInMaryEra mempty) -- TODO: Generate certificates
         ]
+    AlonzoEra ->
+      Gen.choice
+        [ pure TxCertificatesNone
+        , pure (TxCertificates CertificatesInAlonzoEra  mempty) -- TODO: Generate certificates
+        ]
 
 genTxUpdateProposal :: CardanoEra era -> Gen (TxUpdateProposal era)
 genTxUpdateProposal era =
@@ -486,6 +509,11 @@ genTxUpdateProposal era =
       Gen.choice
         [ pure TxUpdateProposalNone
         , pure (TxUpdateProposal UpdateProposalInMaryEra emptyUpdateProposal) -- TODO: Generate proposals
+        ]
+    AlonzoEra ->
+      Gen.choice
+        [ pure TxUpdateProposalNone
+        , pure (TxUpdateProposal UpdateProposalInAlonzoEra emptyUpdateProposal) -- TODO: Generate proposals
         ]
   where
     emptyUpdateProposal :: UpdateProposal
@@ -519,7 +547,7 @@ _genTxExecutionUnits era =
 
 genTxBodyContent :: CardanoEra era -> Gen (TxBodyContent era)
 genTxBodyContent era = do
-  trxIns <- Gen.list (Range.constant 1 10) genTxIn
+  _trxIns <- Gen.list (Range.constant 1 10) genTxIn
   trxOuts <- Gen.list (Range.constant 1 10) (genTxOut era)
   fee <- genTxFee era
   validityRange <- genTxValidityRange era
@@ -531,7 +559,7 @@ genTxBodyContent era = do
   mintValue <- genTxMintValue era
 
   pure $ TxBodyContent
-    { txIns = trxIns
+    { txIns = panic "TODO" --trxIns
     , txOuts = trxOuts
     , txFee = fee
     , txValidityRange = validityRange
@@ -551,6 +579,7 @@ genTxFee era =
     ShelleyEra -> TxFeeExplicit TxFeesExplicitInShelleyEra <$> genLovelace
     AllegraEra -> TxFeeExplicit TxFeesExplicitInAllegraEra <$> genLovelace
     MaryEra -> TxFeeExplicit TxFeesExplicitInMaryEra <$> genLovelace
+    AlonzoEra -> TxFeeExplicit TxFeesExplicitInAlonzoEra <$> genLovelace
 
 genTxBody :: CardanoEra era -> Gen (TxBody era)
 genTxBody era =
@@ -564,6 +593,11 @@ genTxBody era =
         Right txBody -> pure txBody
     MaryEra -> do
       res <- makeTransactionBody <$> genTxBodyContent MaryEra
+      case res of
+        Left err -> fail (show err) -- TODO: Render function for TxBodyError
+        Right txBody -> pure txBody
+    AlonzoEra -> do
+      res <- makeTransactionBody <$> genTxBodyContent AlonzoEra
       case res of
         Left err -> fail (show err) -- TODO: Render function for TxBodyError
         Right txBody -> pure txBody
@@ -581,6 +615,7 @@ genTx era =
         ShelleyEra -> genShelleyBasedWitnessList
         AllegraEra -> genShelleyBasedWitnessList
         MaryEra -> genShelleyBasedWitnessList
+        AlonzoEra -> genShelleyBasedWitnessList
 
     genShelleyBasedWitnessList :: IsShelleyBasedEra era => Gen [Witness era]
     genShelleyBasedWitnessList = do
@@ -659,8 +694,8 @@ genMaybePraosNonce :: Gen (Maybe PraosNonce)
 genMaybePraosNonce =
   Gen.maybe (makePraosNonce <$> Gen.bytes (Range.linear 0 32))
 
-genProtocolParameters :: Gen ProtocolParameters
-genProtocolParameters =
+genProtocolParameters :: ShelleyBasedEra era -> Gen (ProtocolParameters era)
+genProtocolParameters _sbe =
   ProtocolParameters
     <$> ((,) <$> genNat <*> genNat)
     <*> genRational
@@ -670,7 +705,7 @@ genProtocolParameters =
     <*> genNat
     <*> genNat
     <*> genNat
-    <*> genLovelace
+    <*> Gen.maybe genLovelace
     <*> genLovelace
     <*> genLovelace
     <*> genLovelace
@@ -679,4 +714,10 @@ genProtocolParameters =
     <*> genRational
     <*> genRational
     <*> genRational
+    <*> return Nothing
+    <*> return Nothing
+    <*> return Nothing
+    <*> return Nothing
+    <*> return Nothing
+    <*> return Nothing
 

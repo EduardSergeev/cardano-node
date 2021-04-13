@@ -153,7 +153,7 @@ pAddressCmd =
 
     pAddressBuildScript :: Parser AddressCmd
     pAddressBuildScript = AddressBuildMultiSig
-      <$> pScript
+      <$> pScriptFile
       <*> pNetworkId
       <*> pMaybeOutputFile
 
@@ -210,6 +210,24 @@ pScriptFor name help = ScriptFile <$> Opt.strOption
   <> Opt.help help
   <> Opt.completer (Opt.bashCompleter "file")
   )
+
+--parseDatum :: Parser Datum
+--parseDatum = Datum <$> Opt.strOption
+--              (  Opt.long "datum-file"
+--              <> Opt.metavar "FILE"
+--              <> Opt.help "Filepath of the datum. The data passed is \
+--                          \passed to a Plutus script which validates \
+--                          \that the output is spent correctly"
+--              <> Opt.completer (Opt.bashCompleter "file")
+--              )
+
+--pRedeemer :: Parser Redeemer
+--pRedeemer = Redeemer <$> Opt.strOption
+--    (  Opt.long "redeemer-file"
+--    <> Opt.metavar "FILE"
+--    <> Opt.help "Filepath of the script redeemer."
+--    <> Opt.completer (Opt.bashCompleter "file")
+--    )
 
 pStakeAddressCmd :: Parser StakeAddressCmd
 pStakeAddressCmd =
@@ -513,7 +531,8 @@ pTransaction =
                                  <*> many pCertificateFile
                                  <*> many pWithdrawal
                                  <*> pTxMetadataJsonSchema
-                                 <*> many pScript
+                                 <*> many pScriptFile
+                                 <*> optional pProtocolParamsFile
                                  <*> many pMetadataFile
                                  <*> optional pUpdateProposalFile
                                  <*> pTxBodyFile Output
@@ -543,7 +562,7 @@ pTransaction =
                                 <*> pTxSubmitFile
 
   pTransactionPolicyId :: Parser TransactionCmd
-  pTransactionPolicyId = TxMintedPolicyId <$> pScript
+  pTransactionPolicyId = TxMintedPolicyId <$> pScriptFile
 
   pTransactionCalculateMinFee :: Parser TransactionCmd
   pTransactionCalculateMinFee =
@@ -1190,7 +1209,7 @@ pSomeWitnessSigningData =
         <*>
           optional pByronAddress
     <|>
-      ScriptWitnessSigningData <$> pScript
+      ScriptWitnessSigningData <$> pScriptFile
 
 pSigningKeyFile :: FileDirection -> Parser SigningKeyFile
 pSigningKeyFile fdir =
@@ -1217,7 +1236,7 @@ pWitnessSigningData =
       <*>
         optional pByronAddress
   <|>
-    ScriptWitnessSigningData <$> pScript
+    ScriptWitnessSigningData <$> pScriptFile
 
 pKesPeriod :: Parser KESPeriod
 pKesPeriod =

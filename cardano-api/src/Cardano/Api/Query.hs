@@ -123,10 +123,10 @@ data QueryInShelleyBasedEra era result where
        :: QueryInShelleyBasedEra era EpochNo
 
      QueryGenesisParameters
-       :: QueryInShelleyBasedEra era GenesisParameters
+       :: QueryInShelleyBasedEra era (GenesisParameters era)
 
      QueryProtocolParameters
-       :: QueryInShelleyBasedEra era ProtocolParameters
+       :: QueryInShelleyBasedEra era (ProtocolParameters era)
 
      QueryProtocolParametersUpdate
        :: QueryInShelleyBasedEra era
@@ -451,14 +451,14 @@ fromConsensusQueryResultShelleyBased _ QueryEpoch q' epoch =
       Consensus.GetEpochNo -> epoch
       _                    -> fromConsensusQueryResultMismatch
 
-fromConsensusQueryResultShelleyBased _ QueryGenesisParameters q' r' =
+fromConsensusQueryResultShelleyBased shelleyBasedEra' QueryGenesisParameters q' r' =
     case q' of
       Consensus.GetGenesisConfig -> fromRight (error "Handle")
                                       $ fromShelleyGenesis shelleyBasedEra'
                                           (Consensus.getCompactGenesis r')
       _                          -> fromConsensusQueryResultMismatch
 
-fromConsensusQueryResultShelleyBased _ QueryProtocolParameters q' r' =
+fromConsensusQueryResultShelleyBased shelleyBasedEra' QueryProtocolParameters q' r' =
     case q' of
       Consensus.GetCurrentPParams -> fromRight (error "Handle")
                                        $ fromShelleyPParams shelleyBasedEra' r'

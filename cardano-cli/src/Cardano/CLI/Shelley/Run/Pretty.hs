@@ -18,7 +18,7 @@ import           Data.Yaml.Pretty (defConfig, encodePretty, setConfCompare)
 
 import           Cardano.Api as Api (AddressInEra (..),
                    AddressTypeInEra (ByronAddressInAnyEra, ShelleyAddressInEra), CardanoEra,
-                   ShelleyBasedEra (ShelleyBasedEraAllegra, ShelleyBasedEraMary, ShelleyBasedEraShelley),
+                   ShelleyBasedEra (ShelleyBasedEraAllegra, ShelleyBasedEraMary, ShelleyBasedEraAlonzo, ShelleyBasedEraShelley),
                    ShelleyEra, TxBody, serialiseAddress)
 import           Cardano.Api.Byron (TxBody (ByronTxBody))
 import           Cardano.Api.Shelley (TxBody (ShelleyTxBody), fromShelleyAddr)
@@ -44,12 +44,14 @@ friendlyTxBody era txbody =
     <>
     case txbody of
       ByronTxBody body -> friendlyTxBodyByron body
-      ShelleyTxBody ShelleyBasedEraShelley body aux ->
+      ShelleyTxBody ShelleyBasedEraShelley body aux _ ->
         addAuxData aux $ friendlyTxBodyShelley body
-      ShelleyTxBody ShelleyBasedEraAllegra body aux ->
+      ShelleyTxBody ShelleyBasedEraAllegra body aux _ ->
         addAuxData aux $ friendlyTxBodyAllegra body
-      ShelleyTxBody ShelleyBasedEraMary body aux ->
+      ShelleyTxBody ShelleyBasedEraMary body aux _ ->
         addAuxData aux $ friendlyTxBodyMary body
+      ShelleyTxBody ShelleyBasedEraAlonzo _body aux _isValidating ->
+        addAuxData aux $ panic "todo" --friendlyTxBodyMary body
 
 addAuxData :: Show a => Maybe a -> Object -> Object
 addAuxData = HashMap.insert "auxiliary data" . maybe Null (toJSON . textShow)
